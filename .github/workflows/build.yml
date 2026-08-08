@@ -1,0 +1,30 @@
+name: build
+on: [push, workflow_dispatch]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Filter *.zip | Select-Object -First 1
+          Expand-Archive -Path $zip.FullName -DestinationPath . -Force
+          if (-not (Test-Path CMakeLists.txt)) {
+            $d = Get-ChildItem -Directory | Where-Object {
+              Test-Path (Join-Path $_.FullName 'CMakeLists.txt') } | Select-Object -First 1
+            Get-ChildItem -Path $d.FullName -Force | Move-Item -Destination . -Force
+          }
+
+      - run: cmake -B build -G "Visual Studio 17 2022" -A x64
+      - run: cmake --build build --config Release --parallel 4
+      - run: ctest --test-dir build -C Release --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HUSK-windows
+          path: |
+            build/HUSK_artefacts/Release/VST3/**
+            build/HUSK_artefacts/Release/Standalone/**
